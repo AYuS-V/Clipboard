@@ -1,25 +1,4 @@
 # Clipboard
 
-# Required metadata
-sonar.projectKey=angular11-testing-examples
-sonar.projectName=Angular 11 Testing Examples
-sonar.projectVersion=0.2.0
-
-# Source code location
-sonar.sources=src
-# sonar.tests=src
-
-# Language
-sonar.language=ts
-
-# Test coverage
-sonar.javascript.lcov.reportPaths=coverage/lcov.info
-sonar.typescript.lcov.reportPaths=coverage/lcov.info
-
-# Exclusions
-sonar.inclusion= **/*spec.ts
-sonar.exclusions= **/node_modules/** 
-
-# Additional properties
-sonar.sourceEncoding=UTF-8
-
+curl -sO http://192.168.0.81:8080/jnlpJars/agent.jar;java -jar agent.jar -url http://192.168.0.81:8080/ -secret e631bd718295ffb92f5e8418eefab2fe6a943bf3ff0b8677dd1393577ab16aea -name aayush -webSocket -workDir "/home/Aayush/Desktop/Jenkins"
+ 
