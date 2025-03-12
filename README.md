@@ -1,4 +1,4 @@
 # Clipboard
 
-curl -sO http://192.168.0.81:8080/jnlpJars/agent.jar;java -jar agent.jar -url http://192.168.0.81:8080/ -secret e631bd718295ffb92f5e8418eefab2fe6a943bf3ff0b8677dd1393577ab16aea -name aayush -webSocket -workDir "/home/Aayush/Desktop/Jenkins"
+curl -sO http://localhost:8080/jnlpJars/agent.jar;java -jar agent.jar -url http://localhost:8080/ -secret adbc0af4dd978098e098bcb418baeb06f49ed7040f98814b1087fbdd57134bd5 -name Aayush -webSocket -workDir "/home/shaikh-aftab/Desktop/jenkins_practice"
  
