@@ -20,10 +20,10 @@ Group=nexus
 ExecStart=/opt/nexus/bin/nexus start
 ExecStop=/opt/nexus/bin/nexus stop
 Restart=on-abort
-LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
+
 
 
 
