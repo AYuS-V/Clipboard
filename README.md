@@ -9,6 +9,23 @@ curl -sO http://192.168.0.57:8080/jnlpJars/agent.jar;java -jar agent.jar -url ht
 
 https://github.com/themeselection/sneat-bootstrap-html-aspnet-core-mvc-admin-template-free.git/
 
+[Unit]
+Description=Nexus Repository Manager
+After=network.target
+
+[Service]
+Type=forking
+User=nexus
+Group=nexus
+ExecStart=/opt/nexus/bin/nexus start
+ExecStop=/opt/nexus/bin/nexus stop
+Restart=on-abort
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+
+
 
 pipeline {
     agent any
