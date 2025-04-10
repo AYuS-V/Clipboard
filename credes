@@ -1,0 +1,11 @@
+[test]
+192.168.0.21
+
+[test:vars]
+ansible_user=Administrator
+ansible_password=Admin_SR
+ansible_connection=winrm
+ansible_port=5985
+ansible_winrm_transport=basic
+ansible_winrm_scheme=http
+ansible_winrm_server_cert_validation=ignore
