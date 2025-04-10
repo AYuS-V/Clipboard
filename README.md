@@ -1,59 +1,111 @@
-# Clipboard
+Playbook path : /etc/ansible/Playbooks/script.yml
 
-/home/admin/Desktop/practice
+- name: Stop IIS Application and Backup Files
+  hosts: test_server
+  vars: 
+    Nexus_URL: ""
+  tasks:
 
-curl -sO http://192.168.0.57:8080/jnlpJars/agent.jar;java -jar agent.jar -url http://192.168.0.57:8080/ -secret c3c279447bd9c6f3d4416185940f2c91283bf4ee98e393e3726465c84dcf6aaa -name Aayush -webSocket -workDir "/home/admin/Desktop/practice"
+    - name: Stop IIS Application
+      win_shell: |
+        Import-Module WebAdministration
+        Stop-WebAppPool -Name "dev-SpaceReserveServices-User Portal"
+      register: stop_iis_result
 
-wazuh nexus maven url : http://localhost:8081/repository/mvn-upload/
+    - name: Check if IIS Application stopped successfully
+      debug:
+        msg: "IIS Application stopped successfully"
+      when: stop_iis_result.rc == 0
+      
+    - name: Check if Backup Folder exists
+      win_stat:
+        path: C:\BackupFolder
+      register: backup_folder_status
 
-curl -sO http://192.168.0.57:8080/jnlpJars/agent.jar;java -jar agent.jar -url http://192.168.0.57:8080/ -secret a39af8160946ccae91eb50b656fd0ea18b515fc91e898d7393bd4e2c90122b4e -name aftab -webSocket -workDir "/home/shaikh-aftab/Desktop/jenkins"
+    - name: Create Backup Folder 
+      win_file:
+        path: C:\BackupFolder
+        state: directory
+      when: not backup_folder_status.stat.exists
 
-https://github.com/themeselection/sneat-bootstrap-html-aspnet-core-mvc-admin-template-free.git/
+    - name: Backing up the old files
+      win_copy:
+        src: "{{ item }}"
+        dest: C:\BackupFolder\
+      with_items:
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\appsettings.Development.json
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\appsettings.QA.json
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\appsettings.json
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\web.config
 
-[Unit]
-Description=Nexus Repository Manager
-After=network.target
+    - name: Backing up the logs folder
+      win_copy:
+        src: "{{ item }}" 
+        dest: C:\BackupFolder\
+        recurse: yes
+      with_items:
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\logs
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\runtime
 
-[Service]
-Type=forking
-User=nexus
-Group=nexus
-ExecStart=/opt/nexus/bin/nexus start
-ExecStop=/opt/nexus/bin/nexus stop
-Restart=on-abort
+    - name: Deleting older build
+      win_file: 
+        path: C:\inetpub\wwwroot\SpaceReserveServices-User Portal
+        state: absent
 
-[Install]
-WantedBy=multi-user.target
+     - name: Check if build folder exist Folder exists
+      win_stat:
+        path: C:\Latest_Build
+      register: latest_folder_status
 
+    - name: Create Latest build Folder 
+      win_file:
+        path: C:\Latest_Build
+        state: directory
+      when: not latest_folder_status.stat.exists
 
+    - name: Downloading from provided Nexus URL
+      win_get_url:
+        url: "{{ Nexus_URL }}"
+        dest: C:\Latest_Build\latest_build.zip
 
+    - name: Unzipping the artifact file
+      win_unzip: 
+        src: C:\Latest_Build\latest_build.zip
+        dest: C:\Latest_Build\
+        remote_src: yes
 
-pipeline {
-    agent any
-    
-    environment {
-        GIT_REPO ='https://github.com/themeselection/sneat-bootstrap-html-aspnet-core-mvc-admin-template-free.git'
-        GIT_BRANCH = 'main'
-    }
-    
-    stages{
-        stage('Clone Repo') {
-            steps {
-                git branch: "${GIT_BRANCH}", url: "${GIT_REPO}"
-            }
-        }
-        
-        stage('Restore') {
-            steps {
-                sh 'dotnet restore'
-            }
-        }
-        
-        stage('Build') {
-            steps {
-                sh 'dotnet build'
-            }
-        }
-    }
-    
-}
+    - name: Copying the latest build into SpaceReserveServices-User Portal
+      win_copy:
+        src: C:\Latest_Build\
+        dest: C:\inetpub\wwwroot\SpaceReserveServices-User Portal\
+        remote_src: yes
+
+    - name: Deleting the some of the new files which are stored in backup folder
+      win_file:
+        path: "{{ item }}"
+        state: absent
+      with_items: 
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\appsettings.Development.json
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\appsettings.QA.json
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\appsettings.json
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\web.config
+
+    - name: Deleting some of the folders
+      win_file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\logs
+        - C:\inetpub\wwwroot\SpaceReserveService-User Portal\runtime
+
+    - name: Copying the backup files into the main published code
+      win_copy: 
+        src: C:\BackupFolder\
+        dest: C:\inetpub\wwwroot\SpaceReserveServices-User Portal\
+        remote_src: yes
+
+    - name: Restart the IIS application
+      win_shell: |
+        Import-Module WebAdministration
+        Start-WebAppPool -Name "dev-SpaceReserveServices-User Portal"
+      register: restart_iis_result
