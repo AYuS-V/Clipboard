@@ -83,14 +83,14 @@
     - name: Unzipping the artifact file
       win_unzip: 
         src: C:\Latest_Build\latest_build.zip
-        dest: C:\Latest_Build\
+        dest: C:\inetpub\wwwroot\{{ site_name }}\
         remote_src: yes
 
-    - name: Copying the latest build into SpaceReserveServices-User Portal
-      win_copy:
-        src: C:\Latest_Build\
-        dest: C:\inetpub\wwwroot\{{site_name}}\
-        remote_src: yes
+    #- name: Copying the latest build into SpaceReserveServices-User Portal
+      #win_copy:
+        #src: C:\Latest_Build\
+        #dest: C:\inetpub\wwwroot\{{site_name}}\
+        #remote_src: yes
 
     - name: Deleting some of the new files which are stored in backup folder
       win_file:
@@ -109,6 +109,7 @@
       with_items:
         - C:\inetpub\wwwroot\{{site_name}}\logs
         - C:\inetpub\wwwroot\{{site_name}}\runtimes
+        - C:\inetpub\wwwroot\{{site_name}}\latest_build.zip
 
     - name: Copying the backup files into the main published code
       win_copy: 
