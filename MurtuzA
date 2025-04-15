@@ -1,3 +1,6 @@
+ansible-playbook NexusScript.yml --extra-var "site_name=qa_spacereserveservices_user port_for_site=8070"
+
+---
 - name: Stop IIS Application and Backup Files
   hosts: windowsmain
   vars: 
@@ -6,7 +9,6 @@
     port_for_site: "{{ port }}"
     backup_path: "C:\\Backup-{{ site_name }}"
     latest_build_path: "C:\\Latest_Build"
- 
   tasks:
 
     # 1. Ensure Application Pool Exists
@@ -71,20 +73,17 @@
       register: site_contents
  
     # 6. Backup Configuration Files (only if they exist)
-    - name: State config files
+    - name: State config file
       win_stat:
-        path: "{{ item }}"
-      loop:
-        - "C:\\inetpub\\wwwroot\\{{ site_name }}\\web.config"
+        path: "C:\\inetpub\\wwwroot\\{{ site_name }}\\web.config"
       register: config_stats
  
-    - name: Backup Configuration Files
+    - name: Backup Configuration File
       win_copy:
-        src: "{{ item.stat.path }}"
+        src: "{{ config_stats.stat.path }}"
         dest: "{{ backup_path }}\\"
         remote_src: yes
-      loop: "{{ config_stats.results }}"
-      when: item.stat.exists
+      when: config_stats.stat.exists
  
     - name: State folders
       win_stat:
@@ -136,8 +135,7 @@
     - name: Check if download was successful
       debug:
         var: download_result.stdout
-
-
+        
     - name: Unzip Artifact
       win_unzip:
         src: "{{ latest_build_path }}\\latest_build.zip"
