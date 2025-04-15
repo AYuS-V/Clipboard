@@ -1,10 +1,10 @@
 ansible-playbook NexusScript.yml --extra-var "site_name=qa_spacereserveservices_user port_for_site=8070"
 
 ---
-- name: Stop IIS Application and Backup Files
+- name: Backend Playbook For Deployment on IIS Server
   hosts: windowsmain
   vars: 
-    script_path: "C:\\Script\\script.py"  # Update this path with the actual location of your script
+    script_path: "C:\\Script\\script.py"
     site_name: "{{ site_name }}"
     port_for_site: "{{ port }}"
     backup_path: "C:\\Backup-{{ site_name }}"
