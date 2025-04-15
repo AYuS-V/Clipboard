@@ -1,140 +1,178 @@
----
 - name: Stop IIS Application and Backup Files
   hosts: test_server
-  vars:
-    Nexus_URL: "http://172.16.1.236:8081/service/rest/v1/search/assets/download?sort=version&direction=desc&repository=Space-Reserve&format=maven2&group=Space-Reserve&name=dev_spacereserveservices_user&version=1.0.0"
-    site_name: "dev-SpaceReserveServices-User Portal"
-    backup_dir: "C:\Backup"
-    latest_build_dir: "C:\Latest_Build"
-    timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
-    backup_folder: "{{ backup_dir }}\backup_{{ timestamp }}"
-
+  vars: 
+    script_path: "C:\\Script\\script.py"  # Update this path with the actual location of your script
+    site_name: "{{ site_name }}"
+    port_for_site: "{{ port }}"
+    backup_path: "C:\\Backup-{{ site_name }}"
+    latest_build_path: "C:\\Latest_Build"
+ 
   tasks:
 
-    - name: Check if the IIS Application is running
+    # 1. Ensure Application Pool Exists
+    - name: Check if IIS Application Pool exists
       win_shell: |
         Import-Module WebAdministration
-        (Get-Website -Name "{{ site_name }}").State
-      register: app_state
-
-    - name: Stop IIS Application if it is running
-      win_shell: |
-        Import-Module WebAdministration
-        Stop-Website -Name "{{ site_name }}"
-      when: app_state.stdout.strip() == "Started"
-      register: stop_iis_result
-      failed_when: stop_iis_result.rc != 0
-
-    - name: Check if Backup Folder exists
-      win_stat:
-        path: "{{ backup_folder }}"
-      register: backup_folder_status
-
-    - name: Create Backup Folder 
+        if (Test-Path "IIS:\\AppPools\\{{ site_name }}") { Write-Output "Exists" } else { Write-Output "NotExists" }
+      register: app_pool_check
+ 
+    - name: Create Application Pool if it doesn't exist
+      win_iis_webapppool:
+        name: "{{ site_name }}"
+        state: started
+      when: app_pool_check.stdout.strip() == "NotExists"
+ 
+    # 2. Ensure IIS Site Directory Exists
+    - name: Ensure IIS site directory exists
       win_file:
-        path: "{{ backup_folder }}"
+        path: "C:\\inetpub\\wwwroot\\{{ site_name }}"
         state: directory
-      when: not backup_folder_status.stat.exists
-
-    - name: Backing up the old files
-      win_copy:
-        src: "{{ item }}"
-        dest: "{{ backup_folder }}"
-        remote_src: yes
-      with_items:
-        - "C:\inetpub\wwwroot\{{ site_name }}\appsettings.Development.json"
-        - "C:\inetpub\wwwroot\{{ site_name }}\appsettings.QA.json"
-        - "C:\inetpub\wwwroot\{{ site_name }}\appsettings.json"
-        - "C:\inetpub\wwwroot\{{ site_name }}\web.config"
-      register: backup_files_result
-      failed_when: backup_files_result.failed
-
-    - name: Check if logs and runtimes folders exist
+ 
+    # 3. Check if IIS Site Exists
+    - name: Check if IIS Site exists
+      win_shell: |
+        Import-Module WebAdministration
+        $site = Get-Website -Name "{{ site_name }}" -ErrorAction SilentlyContinue
+        if ($site) { Write-Output "Exists" } else { Write-Output "NotExists" }
+      register: site_check
+ 
+    - name: Create IIS Site if it doesn't exist
+      win_iis_website:
+        name: "{{ site_name }}"
+        state: started
+        physical_path: "C:\\inetpub\\wwwroot\\{{ site_name }}"
+        port: "{{ port_for_site }}"
+        ip: "*"
+        application_pool: "{{ site_name }}"
+      when: site_check.stdout.strip() == "NotExists"
+ 
+    # 4. Stop IIS Application Pool
+    - name: Check App Pool State
+      win_shell: |
+        Import-Module WebAdministration
+        (Get-WebAppPoolState -Name "{{ site_name }}").Value
+      register: app_pool_state
+ 
+    - name: Stop App Pool if running
+      win_shell: |
+        Import-Module WebAdministration
+        Stop-WebAppPool -Name "{{ site_name }}"
+      when: app_pool_state.stdout.strip() == "Started"
+ 
+    # 5. Backup Preparation
+    - name: Ensure Backup Directory Exists
+      win_file:
+        path: "{{ backup_path }}"
+        state: directory
+ 
+    - name: Check Existing Site Files
+      win_find:
+        paths: "C:\\inetpub\\wwwroot\\{{ site_name }}"
+      register: site_contents
+ 
+    # 6. Backup Configuration Files (only if they exist)
+    - name: State config files
       win_stat:
         path: "{{ item }}"
-      with_items:
-        - "C:\inetpub\wwwroot\{{ site_name }}\logs"
-        - "C:\inetpub\wwwroot\{{ site_name }}\runtimes"
-      register: folder_status
-
-    - name: Backing up the logs and runtimes folders
+      loop:
+        - "C:\\inetpub\\wwwroot\\{{ site_name }}\\web.config"
+      register: config_stats
+ 
+    - name: Backup Configuration Files
       win_copy:
-        src: "{{ item.item }}"
-        dest: "{{ backup_folder }}"
-        recurse: yes
+        src: "{{ item.stat.path }}"
+        dest: "{{ backup_path }}\\"
         remote_src: yes
-      with_items: "{{ folder_status.results }}"
+      loop: "{{ config_stats.results }}"
       when: item.stat.exists
-      register: log_runtime_backup_result
-      failed_when: log_runtime_backup_result.failed
-
-    - name: Deleting older build
-      win_file:
-        path: "C:\inetpub\wwwroot\{{ site_name }}"
-        state: absent
-      failed_when: result.rc != 0
-
-    - name: Check if latest build folder exists
+ 
+    - name: State folders
       win_stat:
-        path: "{{ latest_build_dir }}"
-      register: latest_folder_status
-
-    - name: Create Latest build Folder 
-      win_file:
-        path: "{{ latest_build_dir }}"
-        state: directory
-      when: not latest_folder_status.stat.exists
-
-    - name: Downloading from provided Nexus URL
-      win_get_url:
-        url: "{{ Nexus_URL }}"
-        dest: "{{ latest_build_dir }}\latest_build.zip"
-      register: download_result
-      failed_when: download_result.failed
-
-    - name: Unzipping the artifact file
-      win_unzip:
-        src: "{{ latest_build_dir }}\latest_build.zip"
-        dest: "C:\inetpub\wwwroot\{{ site_name }}\"
-        remote_src: yes
-      failed_when: result.rc != 0
-
-    - name: Deleting old build files (restoring backup)
-      win_file:
         path: "{{ item }}"
-        state: absent
-      with_items:
-        - "C:\inetpub\wwwroot\{{ site_name }}\appsettings.Development.json"
-        - "C:\inetpub\wwwroot\{{ site_name }}\appsettings.QA.json"
-        - "C:\inetpub\wwwroot\{{ site_name }}\appsettings.json"
-        - "C:\inetpub\wwwroot\{{ site_name }}\web.config"
-      failed_when: result.rc != 0
-
-    - name: Deleting old logs and runtimes folders
-      win_file:
-        path: "{{ item }}"
-        state: absent
-      with_items:
-        - "C:\inetpub\wwwroot\{{ site_name }}\logs"
-        - "C:\inetpub\wwwroot\{{ site_name }}\runtimes"
-        - "C:\inetpub\wwwroot\{{ site_name }}\latest_build.zip"
-      failed_when: result.rc != 0
-
-    - name: Copying the backup files into the main published code
+      loop:
+        - "C:\\inetpub\\wwwroot\\{{ site_name }}\\logs"
+        - "C:\\inetpub\\wwwroot\\{{ site_name }}\\runtimes"
+      register: folder_stats
+ 
+    - name: Backup Logs and Runtimes
       win_copy:
-        src: "{{ backup_folder }}\"
-        dest: "C:\inetpub\wwwroot\{{ site_name }}\"
+        src: "{{ item.stat.path }}"
+        dest: "{{ backup_path }}\\"
         remote_src: yes
-      failed_when: result.rc != 0
+        recurse: yes
+      loop: "{{ folder_stats.results }}"
+      when: item.stat.exists
+ 
+    # 7. Clean Old Build
+    - name: Remove Existing Site Files
+      win_file:
+        path: "C:\\inetpub\\wwwroot\\{{ site_name }}"
+        state: absent
+ 
+    # 8. Download & Deploy New Build
+    - name: Ensure Latest Build Directory
+      win_file:
+        path: "{{ latest_build_path }}"
+        state: directory
+        
+    - name: Delete Old ZIP Files
+      win_shell: |
+        Get-ChildItem -Path "{{ latest_build_path }}" -Filter "*.zip" -Recurse | Remove-Item -Force
+      args:
+        executable: powershell
+      register: delete_old_zip_result
 
-    - name: Restart the IIS application
+    - name: Debug Deleted ZIP Files
+      debug:
+        var: delete_old_zip_result.stdout
+ 
+    - name: Download Artifact Using Script
+      win_shell: |
+        python "{{ script_path }}" "{{ site_name }}"
+      args:
+        chdir: "{{ latest_build_path }}"
+      register: download_result
+
+    - name: Check if download was successful
+      debug:
+        var: download_result.stdout
+
+    - name: Rename the downloaded ZIP file to latest_zip.zip
+      win_shell: |
+        $zipFile = Get-ChildItem -Path "{{ latest_build_path }}" -Filter "*.zip" -Recurse | Select-Object -First 1
+        if ($zipFile -ne $null) {
+            Rename-Item -Path $zipFile.FullName -NewName "latest_zip.zip"
+        } else {
+            Write-Host "No ZIP file found to rename."
+        }
+      args:
+        executable: powershell
+
+    - name: Unzip Artifact
+      win_unzip:
+        src: "{{ latest_build_path }}\\latest_zip.zip"
+        dest: "C:\\inetpub\\wwwroot\\{{ site_name }}\\"
+        remote_src: yes
+ 
+    # 9. Restore Configurations from Backup
+    - name: Restore Backup Files
+      win_copy:
+        src: "{{ backup_path }}\\"
+        dest: "C:\\inetpub\\wwwroot\\{{ site_name }}\\"
+        remote_src: yes
+      when: site_contents.matched > 0
+ 
+    # 10. Restart IIS (App Pool + Site)
+    - name: Start Application Pool
+      win_shell: |
+        Import-Module WebAdministration
+        Start-WebAppPool -Name "{{ site_name }}"
+ 
+    - name: Start IIS Website
       win_shell: |
         Import-Module WebAdministration
         Start-Website -Name "{{ site_name }}"
-      register: restart_iis_result
-      failed_when: restart_iis_result.rc != 0
-
-    - name: Check if IIS Application restarted successfully
+ 
+    - name: Notify Success
       debug:
-        msg: "IIS Application has been restarted successfully."
-      when: restart_iis_result.rc == 0
+        msg: "Deployment completed successfully for {{ site_name }} on port {{ port_for_site }}"
