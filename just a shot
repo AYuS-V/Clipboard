@@ -1,5 +1,5 @@
 - name: Stop IIS Application and Backup Files
-  hosts: test_server
+  hosts: windowsmain
   vars: 
     script_path: "C:\\Script\\script.py"  # Update this path with the actual location of your script
     site_name: "{{ site_name }}"
@@ -137,20 +137,10 @@
       debug:
         var: download_result.stdout
 
-    - name: Rename the downloaded ZIP file to latest_zip.zip
-      win_shell: |
-        $zipFile = Get-ChildItem -Path "{{ latest_build_path }}" -Filter "*.zip" -Recurse | Select-Object -First 1
-        if ($zipFile -ne $null) {
-            Rename-Item -Path $zipFile.FullName -NewName "latest_zip.zip"
-        } else {
-            Write-Host "No ZIP file found to rename."
-        }
-      args:
-        executable: powershell
 
     - name: Unzip Artifact
       win_unzip:
-        src: "{{ latest_build_path }}\\latest_zip.zip"
+        src: "{{ latest_build_path }}\\latest_build.zip"
         dest: "C:\\inetpub\\wwwroot\\{{ site_name }}\\"
         remote_src: yes
  
