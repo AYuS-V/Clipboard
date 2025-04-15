@@ -1,12 +1,12 @@
-- name: Stop IIS Application and Backup Files
-  hosts: windows_server
+---
+- name: Backend Playbook For Deployment on IIS Server
+  hosts: windowsmain
   vars: 
-    script_path: "C:\\Script\\script.py"  # Update this path with the actual location of your script
+    script_path: "C:\\Script\\script.py"
     site_name: "{{ site_name }}"
     port_for_site: "{{ port }}"
     backup_path: "C:\\Backup-{{ site_name }}"
     latest_build_path: "C:\\Latest_Build"
- 
   tasks:
 
     # 1. Ensure Application Pool Exists
@@ -71,20 +71,17 @@
       register: site_contents
  
     # 6. Backup Configuration Files (only if they exist)
-    - name: State config files
+    - name: State config file
       win_stat:
-        path: "{{ item }}"
-      loop:
-        - "C:\\inetpub\\wwwroot\\{{ site_name }}\\web.config"
+        path: "C:\\inetpub\\wwwroot\\{{ site_name }}\\web.config"
       register: config_stats
  
-    - name: Backup Configuration Files
+    - name: Backup Configuration File
       win_copy:
-        src: "{{ item.stat.path }}"
+        src: "{{ config_stats.stat.path }}"
         dest: "{{ backup_path }}\\"
         remote_src: yes
-      loop: "{{ config_stats.results }}"
-      when: item.stat.exists
+      when: config_stats.stat.exists
  
     - name: State folders
       win_stat:
@@ -114,6 +111,17 @@
       win_file:
         path: "{{ latest_build_path }}"
         state: directory
+        
+    - name: Delete Old ZIP Files
+      win_shell: |
+        Get-ChildItem -Path "{{ latest_build_path }}" -Filter "*.zip" -Recurse | Remove-Item -Force
+      args:
+        executable: powershell
+      register: delete_old_zip_result
+
+    - name: Debug Deleted ZIP Files
+      debug:
+        var: delete_old_zip_result.stdout
  
     - name: Download Artifact Using Script
       win_shell: |
@@ -125,21 +133,10 @@
     - name: Check if download was successful
       debug:
         var: download_result.stdout
-
-    - name: Rename the downloaded ZIP file to latest_zip.zip
-      win_shell: |
-        $zipFile = Get-ChildItem -Path "{{ latest_build_path }}" -Filter "*.zip" -Recurse | Select-Object -First 1
-        if ($zipFile -ne $null) {
-            Rename-Item -Path $zipFile.FullName -NewName "latest_zip.zip"
-        } else {
-            Write-Host "No ZIP file found to rename."
-        }
-      args:
-        executable: powershell
-
+        
     - name: Unzip Artifact
       win_unzip:
-        src: "{{ latest_build_path }}\\latest_zip.zip"
+        src: "{{ latest_build_path }}\\latest_build.zip"
         dest: "C:\\inetpub\\wwwroot\\{{ site_name }}\\"
         remote_src: yes
  
