@@ -1,13 +1,14 @@
 - name: Stop IIS Application and Backup Files
-  hosts: windowone
+  hosts: windowsmain
   vars: 
-    Nexus_URL: ""
-    site_name: "ayush"
-    port_for_site: 80
+    script_path: "C:\\Script\\script.py"  # Update this path with the actual location of your script
+    site_name: "{{ site_name }}"
+    port_for_site: "{{ port }}"
     backup_path: "C:\\Backup-{{ site_name }}"
     latest_build_path: "C:\\Latest_Build"
  
   tasks:
+
     # 1. Ensure Application Pool Exists
     - name: Check if IIS Application Pool exists
       win_shell: |
@@ -21,13 +22,13 @@
         state: started
       when: app_pool_check.stdout.strip() == "NotExists"
  
-    # 2. Ensure IIS site directory exists
+    # 2. Ensure IIS Site Directory Exists
     - name: Ensure IIS site directory exists
       win_file:
         path: "C:\\inetpub\\wwwroot\\{{ site_name }}"
         state: directory
  
-    # 3. Check if IIS Site exists
+    # 3. Check if IIS Site Exists
     - name: Check if IIS Site exists
       win_shell: |
         Import-Module WebAdministration
@@ -70,13 +71,10 @@
       register: site_contents
  
     # 6. Backup Configuration Files (only if they exist)
-    - name: Stat config files
+    - name: State config files
       win_stat:
         path: "{{ item }}"
       loop:
-        - "C:\\inetpub\\wwwroot\\{{ site_name }}\\appsettings.Development.json"
-        - "C:\\inetpub\\wwwroot\\{{ site_name }}\\appsettings.QA.json"
-        - "C:\\inetpub\\wwwroot\\{{ site_name }}\\appsettings.json"
         - "C:\\inetpub\\wwwroot\\{{ site_name }}\\web.config"
       register: config_stats
  
@@ -88,8 +86,7 @@
       loop: "{{ config_stats.results }}"
       when: item.stat.exists
  
-    # 6b. Backup folders (logs and runtimes)
-    - name: Stat folders
+    - name: State folders
       win_stat:
         path: "{{ item }}"
       loop:
@@ -117,12 +114,30 @@
       win_file:
         path: "{{ latest_build_path }}"
         state: directory
+        
+    - name: Delete Old ZIP Files
+      win_shell: |
+        Get-ChildItem -Path "{{ latest_build_path }}" -Filter "*.zip" -Recurse | Remove-Item -Force
+      args:
+        executable: powershell
+      register: delete_old_zip_result
+
+    - name: Debug Deleted ZIP Files
+      debug:
+        var: delete_old_zip_result.stdout
  
-    - name: Download Artifact
-      win_get_url:
-        url: "{{ Nexus_URL }}"
-        dest: "{{ latest_build_path }}\\latest_build.zip"
- 
+    - name: Download Artifact Using Script
+      win_shell: |
+        python "{{ script_path }}" "{{ site_name }}"
+      args:
+        chdir: "{{ latest_build_path }}"
+      register: download_result
+
+    - name: Check if download was successful
+      debug:
+        var: download_result.stdout
+
+
     - name: Unzip Artifact
       win_unzip:
         src: "{{ latest_build_path }}\\latest_build.zip"
@@ -151,5 +166,3 @@
     - name: Notify Success
       debug:
         msg: "Deployment completed successfully for {{ site_name }} on port {{ port_for_site }}"
-
- 
