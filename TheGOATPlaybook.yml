@@ -1,4 +1,4 @@
-- name: Stop IIS Application and Backup Files
+- name: The GOAT Playbook is Running.
   hosts: windowsmain
   vars: 
     script_path: "C:\\Script\\script.js"  # Update this path with the actual location of your Node.js script
